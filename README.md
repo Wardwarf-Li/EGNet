@@ -16,8 +16,6 @@ Use the sal2edge.m to generate the edge label for training.
 
 2. Generate saliency maps and evaluation metric for SOD dataset by `python3 run.py --mode test`
 
-3. Testing code we use is the public open source code. (https://github.com/Andrew-Qibin/SalMetric)
-
 
 ### Pretrained models, datasets and results:
 | [Page](https://mmcheng.net/jxzhao/) |
