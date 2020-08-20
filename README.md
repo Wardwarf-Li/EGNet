@@ -17,13 +17,6 @@ Use the sal2edge.m to generate the edge label for training.
 2. Generate saliency maps and evaluation metric for SOD dataset by `python3 run.py --mode test`
 
 
-### Pretrained models, datasets and results:
-| [Page](https://mmcheng.net/jxzhao/) |
-| [Training Set](https://pan.baidu.com/s/1LaQoNRS8-11V7grAfFiHCg) (fsex) ([google drive](https://drive.google.com/open?id=1wduPbFMkxB_3W72LvJckD7N0hWbXsKsj)) |
-| [Pretrained models](https://pan.baidu.com/s/1s35ZyGDSNVzVIeVd7Aot0Q) (2cf5) |
-| [Saliency maps](https://pan.baidu.com/s/1M_dqPJ08oaYWge_zZnHSTQ) (54gi) ([google drive VGG](https://drive.google.com/open?id=1WEuEqNmqMePyxD8anGo0KA4rWK9Nyb9I)) ([google drive resnet](https://drive.google.com/open?id=1h5R8tT3Jq_2S3pLfXREpuWaKvFphQ4K9)) |
-
-
 
 
 
