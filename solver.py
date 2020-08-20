@@ -5,10 +5,12 @@ from torch.optim import Adam, SGD
 from torch.autograd import Variable
 from torch.backends import cudnn
 from model import build_model, weights_init
+from metrics import *
 import scipy.misc as sm
 import numpy as np
 import os
 import torchvision.utils as vutils
+from torch.utils.tensorboard import SummaryWriter
 import cv2
 import torch.nn.functional as F
 import math
@@ -22,7 +24,7 @@ EPSILON = 1e-8
 p = OrderedDict()
 
 from dataset import get_loader
-base_model_cfg = 'resnet'
+base_model_cfg = 'vgg'
 p['lr_bone'] = 5e-5  # Learning rate resnet:5e-5, vgg:2e-5
 p['lr_branch'] = 0.025  # Learning rate
 p['wd'] = 0.0005  # Weight decay
@@ -34,11 +36,12 @@ tmp_path = 'tmp_see'
 
 
 class Solver(object):
-    def __init__(self, train_loader, test_loader, config, save_fold=None):
+    def __init__(self, train_loader, test_loader, config, save_fold=None, temp_path=None):
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.config = config
         self.save_fold = save_fold
+        self.temp_path = temp_path
         self.mean = torch.Tensor([123.68, 116.779, 103.939]).view(3, 1, 1) / 255.
         # inference: choose the side map (see paper)
         if config.visdom:
@@ -46,7 +49,8 @@ class Solver(object):
         self.build_model()
         if self.config.pre_trained: self.net.load_state_dict(torch.load(self.config.pre_trained))
         if config.mode == 'train':
-            self.log_output = open("%s/logs/log.txt" % config.save_fold, 'w')
+            # self.log_output = open("%s/logs/log.txt" % config.save_fold, 'w')
+            self.logger = SummaryWriter("%s/logs" % config.save_fold)
         else:
             print('Loading pre-trained model from %s...' % self.config.model)
             self.net_bone.load_state_dict(torch.load(self.config.model))
@@ -102,35 +106,61 @@ class Solver(object):
         EPSILON = 1e-8
         img_num = len(self.test_loader)
         time_t = 0.0
-        name_t = 'EGNet_ResNet50/'
+        name_t = 'EGNet_vgg/'
+
+        Fmeasures = []
+        MAEs = []
+        Smeasures = []
 
         if not os.path.exists(os.path.join(self.save_fold, name_t)):             
-            os.mkdir(os.path.join(self.save_fold, name_t))
+            os.makedirs(os.path.join(self.save_fold, name_t))
         for i, data_batch in enumerate(self.test_loader):
             self.config.test_fold = self.save_fold
-            print(self.config.test_fold)
-            images_, name, im_size = data_batch['image'], data_batch['name'][0], np.asarray(data_batch['size'])
+            # print(self.config.test_fold)
+            # images_, name, im_size = data_batch['image'], data_batch['name'][0], np.asarray(data_batch['size'])
+            images_, maps, name = data_batch['sal_image'], data_batch['sal_label'], data_batch['name'][0]
             
             with torch.no_grad():
-                
                 images = Variable(images_)
                 if self.config.cuda:
                     images = images.cuda()
-                print(images.size())
+                # print(images.size())
                 time_start = time.time()
                 up_edge, up_sal, up_sal_f = self.net_bone(images)
                 torch.cuda.synchronize()
                 time_end = time.time()
-                print(time_end - time_start)
+                # print(time_end - time_start)
                 time_t = time_t + time_end - time_start                              
-                pred = np.squeeze(torch.sigmoid(up_sal_f[-1]).cpu().data.numpy())             
+                pred = np.squeeze(torch.sigmoid(up_sal_f[-1]).cpu().data.numpy())
                 multi_fuse = 255 * pred
                 
+                label = torch.squeeze(maps, dim=0)
+                label = torch.squeeze(label, dim=0).data.numpy() * 255
+                img_name = name.split('/')[-1]
+                cv2.imwrite(os.path.join(self.config.test_fold, name_t, img_name), label)
+                cv2.imwrite(os.path.join(self.config.test_fold, name_t, img_name[:-4] + '.png'), multi_fuse)
 
-                
-                cv2.imwrite(os.path.join(self.config.test_fold,name_t, name[:-4] + '.png'), multi_fuse)
-          
-        print("--- %s seconds ---" % (time_t))
+                # evaluate on metrics
+                pred = torch.from_numpy(pred).cuda()
+                # [1, h, w]
+                pred = torch.unsqueeze(pred, dim=0)
+                map_ = torch.squeeze(maps.cuda(), dim=0)
+                # print(pred.size(), map_.size())
+                MAEs.append(mae(pred, map_))
+                Fmeasures.append(Fmeasure(pred, map_, 0.3))
+                Smeasures.append(Smeasure(pred, map_))
+
+        print("MAE:")
+        print(MAEs)
+        print("mean of MAEs: %.3f" % np.mean(MAEs))
+        print("max-FM:")
+        print(Fmeasures)
+        print("mean of max-FM: %.3f" % np.mean(Fmeasures))
+        print("SM:")
+        print(Smeasures)
+        print("mean of SM: %.3f" % np.mean(Smeasures))
+
+        print("--- %s seconds ---" % time_t)
         print('Test Done!')
 
    
@@ -139,16 +169,17 @@ class Solver(object):
         iter_num = len(self.train_loader.dataset) // self.config.batch_size
         aveGrad = 0
         F_v = 0
-        if not os.path.exists(tmp_path): 
-            os.mkdir(tmp_path)
+        if not os.path.exists(self.temp_path): 
+            os.mkdir(self.temp_path)
         for epoch in range(self.config.epoch):                          
             r_edge_loss, r_sal_loss, r_sum_loss= 0,0,0
             self.net_bone.zero_grad()
             for i, data_batch in enumerate(self.train_loader):
                 sal_image, sal_label, sal_edge = data_batch['sal_image'], data_batch['sal_label'], data_batch['sal_edge']
                 if sal_image.size()[2:] != sal_label.size()[2:]:
+                    print(sal_image.size(), sal_label.size(), sal_edge.size())
                     print("Skip this batch")
-                    continue
+                    break
                 sal_image, sal_label, sal_edge = Variable(sal_image), Variable(sal_label), Variable(sal_edge)
                 if self.config.cuda: 
                     sal_image, sal_label, sal_edge = sal_image.cuda(), sal_label.cuda(), sal_edge.cuda()
@@ -195,10 +226,15 @@ class Solver(object):
 
                 if i % 200 == 0:
 
-                    vutils.save_image(torch.sigmoid(up_sal_f[-1].data), tmp_path+'/iter%d-sal-0.jpg' % i, normalize=True, padding = 0)
+                    vutils.save_image(torch.sigmoid(up_sal_f[-1].data), self.temp_path+'/epoch%d-iter%d-sal-0.jpg' % (epoch, i), normalize=True, padding = 0)
 
-                    vutils.save_image(sal_image.data, tmp_path+'/iter%d-sal-data.jpg' % i, padding = 0)
-                    vutils.save_image(sal_label.data, tmp_path+'/iter%d-sal-target.jpg' % i, padding = 0)
+                    vutils.save_image(sal_image.data, self.temp_path+'/epoch%d-iter%d-sal-data.jpg' % (epoch, i), padding = 0)
+                    vutils.save_image(sal_label.data, self.temp_path+'/epoch%d-iter%d-sal-target.jpg' % (epoch, i), padding = 0)
+
+            # log
+            self.logger.add_scalar('sal_loss', r_sal_loss, epoch)
+            self.logger.add_scalar('edge_loss', r_edge_loss, epoch)
+            self.logger.add_scalar('sum_loss', r_sum_loss, epoch)
             
             if (epoch + 1) % self.config.epoch_save == 0:
                 torch.save(self.net_bone.state_dict(), '%s/models/epoch_%d_bone.pth' % (self.config.save_fold, epoch + 1))
@@ -207,7 +243,8 @@ class Solver(object):
                 self.lr_bone = self.lr_bone * 0.1  
                 self.optimizer_bone = Adam(filter(lambda p: p.requires_grad, self.net_bone.parameters()), lr=self.lr_bone, weight_decay=p['wd'])
 
-
+        # log close
+        self.logger.close()
         torch.save(self.net_bone.state_dict(), '%s/models/final_bone.pth' % self.config.save_fold)
         
 def bce2d_new(input, target, reduction=None):

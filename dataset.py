@@ -15,8 +15,8 @@ import random
 class ImageDataTrain(data.Dataset):
     def __init__(self):
 
-        self.sal_root = '/home/liuj/dataset/DUTS/DUTS-TR'
-        self.sal_source = '/home/liuj/dataset/DUTS/DUTS-TR/train_pair_edge.lst'
+        self.sal_root = '/data/lwf/datasets/DUTS-TR'
+        self.sal_source = '/data/lwf/datasets/DUTS-TR/train_pair_small_edge.lst'
 
         with open(self.sal_source, 'r') as f:
             self.sal_list = [x.strip() for x in f.readlines()]
@@ -43,77 +43,109 @@ class ImageDataTrain(data.Dataset):
         return self.sal_num
 
 class ImageDataTest(data.Dataset):
-    def __init__(self, test_mode=1, sal_mode='e'):
-        if test_mode == 0:
-            # self.image_root = '/home/liuj/dataset/saliency_test/ECSSD/Imgs/'
-            # self.image_source = '/home/liuj/dataset/saliency_test/ECSSD/test.lst'
-            self.image_root = '/home/liuj/dataset/HED-BSDS_PASCAL/HED-BSDS/test/'
-            self.image_source = '/home/liuj/dataset/HED-BSDS_PASCAL/HED-BSDS/test.lst'
-            
-            
-        elif test_mode == 1:
-            if sal_mode == 'e':
-                self.image_root = '/home/liuj/dataset/saliency_test/ECSSD/Imgs/'
-                self.image_source = '/home/liuj/dataset/saliency_test/ECSSD/test.lst'
-                self.test_fold = '/media/ubuntu/disk/Result/saliency/ECSSD/'
-            elif sal_mode == 'p':
-                self.image_root = '/home/liuj/dataset/saliency_test/PASCALS/Imgs/'
-                self.image_source = '/home/liuj/dataset/saliency_test/PASCALS/test.lst'
-                self.test_fold = '/media/ubuntu/disk/Result/saliency/PASCALS/'
-            elif sal_mode == 'd':
-                self.image_root = '/home/liuj/dataset/saliency_test/DUTOMRON/Imgs/'
-                self.image_source = '/home/liuj/dataset/saliency_test/DUTOMRON/test.lst'
-                self.test_fold = '/media/ubuntu/disk/Result/saliency/DUTOMRON/'
-            elif sal_mode == 'h':
-                self.image_root = '/home/liuj/dataset/saliency_test/HKU-IS/Imgs/'
-                self.image_source = '/home/liuj/dataset/saliency_test/HKU-IS/test.lst'
-                self.test_fold = '/media/ubuntu/disk/Result/saliency/HKU-IS/'
-            elif sal_mode == 's':
-                self.image_root = '/home/liuj/dataset/saliency_test/SOD/Imgs/'
-                self.image_source = '/home/liuj/dataset/saliency_test/SOD/test.lst'
-                self.test_fold = '/media/ubuntu/disk/Result/saliency/SOD/'
-            elif sal_mode == 'm':
-                self.image_root = '/home/liuj/dataset/saliency_test/MSRA/Imgs/'
-                self.image_source = '/home/liuj/dataset/saliency_test/MSRA/test.lst'
-            elif sal_mode == 'o':
-                self.image_root = '/home/liuj/dataset/saliency_test/SOC/TestSet/Imgs/'
-                self.image_source = '/home/liuj/dataset/saliency_test/SOC/TestSet/test.lst'
-                self.test_fold = '/media/ubuntu/disk/Result/saliency/SOC/'
-            elif sal_mode == 't':
-                self.image_root = '/home/liuj/dataset/DUTS/DUTS-TE/DUTS-TE-Image/'
-                self.image_source = '/home/liuj/dataset/DUTS/DUTS-TE/test.lst'
-                self.test_fold = '/media/ubuntu/disk/Result/saliency/DUTS/'
-        elif test_mode == 2:
+    def __init__(self):
 
-            self.image_root = '/home/liuj/dataset/SK-LARGE/images/test/'
-            self.image_source = '/home/liuj/dataset/SK-LARGE/test.lst'
+        self.sal_root = '/data/lwf/datasets/DUTS-TR'
+        self.sal_source = '/data/lwf/datasets/DUTS-TR/val_pair_small.lst'
+        self.test_fold = './result'
 
-        with open(self.image_source, 'r') as f:
-            self.image_list = [x.strip() for x in f.readlines()]
+        with open(self.sal_source, 'r') as f:
+            self.sal_list = [x.strip() for x in f.readlines()]
 
-        self.image_num = len(self.image_list)
+        self.sal_num = len(self.sal_list)
 
     def __getitem__(self, item):
-        image, im_size = load_image_test(os.path.join(self.image_root, self.image_list[item]))
-        image = torch.Tensor(image)
 
-        return {'image': image, 'name': self.image_list[item%self.image_num], 'size': im_size}
+        sal_image = load_image(os.path.join(self.sal_root, self.sal_list[item%self.sal_num].split()[0]))
+        sal_label = load_sal_label(os.path.join(self.sal_root, self.sal_list[item%self.sal_num].split()[1]))
+        sal_image, sal_label = cv_random_flip_no_edge(sal_image, sal_label)
+        sal_image = torch.Tensor(sal_image)
+        sal_label = torch.Tensor(sal_label)
+
+        sample = {'sal_image': sal_image, 'sal_label': sal_label, 'name': self.sal_list[item % self.sal_num].split()[0]}
+        return sample
+
     def save_folder(self):
         return self.test_fold
 
     def __len__(self):
-        # return max(max(self.edge_num, self.skel_num), self.sal_num)
-        return self.image_num
+        # return max(max(self.edge_num, self.sal_num), self.skel_num)
+        return self.sal_num
+
+
+
+# class ImageDataTest(data.Dataset):
+#     def __init__(self, test_mode=1, sal_mode='e'):
+#         if test_mode == 0:
+#             # self.image_root = '/home/liuj/dataset/saliency_test/ECSSD/Imgs/'
+#             # self.image_source = '/home/liuj/dataset/saliency_test/ECSSD/test.lst'
+#             self.image_root = '/home/liuj/dataset/HED-BSDS_PASCAL/HED-BSDS/test/'
+#             self.image_source = '/home/liuj/dataset/HED-BSDS_PASCAL/HED-BSDS/test.lst'
+            
+            
+#         elif test_mode == 1:
+#             if sal_mode == 'e':
+#                 self.image_root = '/home/liuj/dataset/saliency_test/ECSSD/Imgs/'
+#                 self.image_source = '/home/liuj/dataset/saliency_test/ECSSD/test.lst'
+#                 self.test_fold = '/media/ubuntu/disk/Result/saliency/ECSSD/'
+#             elif sal_mode == 'p':
+#                 self.image_root = '/home/liuj/dataset/saliency_test/PASCALS/Imgs/'
+#                 self.image_source = '/home/liuj/dataset/saliency_test/PASCALS/test.lst'
+#                 self.test_fold = '/media/ubuntu/disk/Result/saliency/PASCALS/'
+#             elif sal_mode == 'd':
+#                 self.image_root = '/home/liuj/dataset/saliency_test/DUTOMRON/Imgs/'
+#                 self.image_source = '/home/liuj/dataset/saliency_test/DUTOMRON/test.lst'
+#                 self.test_fold = '/media/ubuntu/disk/Result/saliency/DUTOMRON/'
+#             elif sal_mode == 'h':
+#                 self.image_root = '/home/liuj/dataset/saliency_test/HKU-IS/Imgs/'
+#                 self.image_source = '/home/liuj/dataset/saliency_test/HKU-IS/test.lst'
+#                 self.test_fold = '/media/ubuntu/disk/Result/saliency/HKU-IS/'
+#             elif sal_mode == 's':
+#                 self.image_root = '/home/liuj/dataset/saliency_test/SOD/Imgs/'
+#                 self.image_source = '/home/liuj/dataset/saliency_test/SOD/test.lst'
+#                 self.test_fold = '/media/ubuntu/disk/Result/saliency/SOD/'
+#             elif sal_mode == 'm':
+#                 self.image_root = '/home/liuj/dataset/saliency_test/MSRA/Imgs/'
+#                 self.image_source = '/home/liuj/dataset/saliency_test/MSRA/test.lst'
+#             elif sal_mode == 'o':
+#                 self.image_root = '/home/liuj/dataset/saliency_test/SOC/TestSet/Imgs/'
+#                 self.image_source = '/home/liuj/dataset/saliency_test/SOC/TestSet/test.lst'
+#                 self.test_fold = '/media/ubuntu/disk/Result/saliency/SOC/'
+#             elif sal_mode == 't':
+#                 self.image_root = '/home/liuj/dataset/DUTS/DUTS-TE/DUTS-TE-Image/'
+#                 self.image_source = '/home/liuj/dataset/DUTS/DUTS-TE/test.lst'
+#                 self.test_fold = '/media/ubuntu/disk/Result/saliency/DUTS/'
+#         elif test_mode == 2:
+
+#             self.image_root = '/home/liuj/dataset/SK-LARGE/images/test/'
+#             self.image_source = '/home/liuj/dataset/SK-LARGE/test.lst'
+
+#         with open(self.image_source, 'r') as f:
+#             self.image_list = [x.strip() for x in f.readlines()]
+
+#         self.image_num = len(self.image_list)
+
+#     def __getitem__(self, item):
+#         image, im_size = load_image_test(os.path.join(self.image_root, self.image_list[item]))
+#         image = torch.Tensor(image)
+
+#         return {'image': image, 'name': self.image_list[item%self.image_num], 'size': im_size}
+#     def save_folder(self):
+#         return self.test_fold
+
+#     def __len__(self):
+#         # return max(max(self.edge_num, self.skel_num), self.sal_num)
+#         return self.image_num
 
 
 # get the dataloader (Note: without data augmentation, except saliency with random flip)
-def get_loader(batch_size, mode='train', num_thread=1, test_mode=0, sal_mode='e'):
+def get_loader(batch_size, mode='train', num_thread=1):
     shuffle = False
     if mode == 'train':
         shuffle = True
         dataset = ImageDataTrain()
     else:
-        dataset = ImageDataTest(test_mode=test_mode, sal_mode=sal_mode)
+        dataset = ImageDataTest()
 
     data_loader = data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_thread)
     return data_loader, dataset
@@ -228,6 +260,14 @@ def cv_random_flip(img, label, edge):
         label = label[:,:,::-1].copy()
         edge = edge[:,:,::-1].copy()
     return img, label, edge
+
+# new
+def cv_random_flip_no_edge(img, label):
+    flip_flag = random.randint(0, 1)
+    if flip_flag == 1:
+        img = img[:,:,::-1].copy()
+        label = label[:,:,::-1].copy()
+    return img, label
 
 def cv_random_crop_flip(img, label, resize_size, crop_size, random_flip=True):
     def get_params(img_size, output_size):

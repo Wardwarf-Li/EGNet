@@ -2,21 +2,31 @@ import argparse
 import os
 from dataset import get_loader
 from solver import Solver
-
+from time import gmtime, strftime
 
 def main(config):
     if config.mode == 'train':
         train_loader, dataset = get_loader(config.batch_size, num_thread=config.num_thread)
-        run = "nnet"
-        if not os.path.exists("%s/run-%s" % (config.save_fold, run)): 
-            os.mkdir("%s/run-%s" % (config.save_fold, run))
-            os.mkdir("%s/run-%s/logs" % (config.save_fold, run))
-            os.mkdir("%s/run-%s/models" % (config.save_fold, run))
-        config.save_fold = "%s/run-%s" % (config.save_fold, run)
-        train = Solver(train_loader, None, config)
+        
+        # run = "nnet"
+        # if not os.path.exists("%s/run-%s" % (config.save_fold, run)): 
+        #     os.mkdir("%s/run-%s" % (config.save_fold, run))
+        #     os.mkdir("%s/run-%s/logs" % (config.save_fold, run))
+        #     os.mkdir("%s/run-%s/models" % (config.save_fold, run))
+        # config.save_fold = "%s/run-%s" % (config.save_fold, run)
+        # train = Solver(train_loader, None, config)
+        
+        run = strftime('V_%m-%d_%H-%M-%S', gmtime())
+        if not os.path.exists("%s/%s" % (config.save_fold, run)): 
+            os.mkdir("%s/%s" % (config.save_fold, run))
+            os.mkdir("%s/%s/logs" % (config.save_fold, run))
+            os.mkdir("%s/%s/models" % (config.save_fold, run))
+        config.save_fold = "%s/%s" % (config.save_fold, run)
+        temp_path = "%s/temp_see" % (config.save_fold)
+        train = Solver(train_loader, None, config, temp_path=temp_path)
         train.train()
     elif config.mode == 'test':
-        test_loader, dataset = get_loader(config.test_batch_size, mode='test',num_thread=config.num_thread, test_mode=config.test_mode, sal_mode=config.sal_mode)
+        test_loader, dataset = get_loader(config.test_batch_size, mode='test',num_thread=config.num_thread)
 
         test = Solver(None, test_loader, config, dataset.save_folder())
         test.test(test_mode=config.test_mode)
@@ -27,8 +37,8 @@ def main(config):
 
 if __name__ == '__main__':
 
-    vgg_path = '/home/liuj/code/Messal/weights/vgg16_20M.pth'
-    resnet_path = '/home/liuj/code/Messal/weights/resnet50_caffe.pth'
+    vgg_path = '/home/lwf/projects/EGNet-masterinitial_model/vgg16_20M.pth'
+    resnet_path = '/home/lwf/projects/EGNet-master/initial_model/resnet50_caffe.pth'
 
     parser = argparse.ArgumentParser()
 
@@ -53,7 +63,7 @@ if __name__ == '__main__':
     parser.add_argument('--pre_trained', type=str, default=None)
 
     # Testing settings
-    parser.add_argument('--model', type=str, default='./epoch_resnet.pth')
+    parser.add_argument('--model', type=str, default='./model/epoch_vgg.pth')
     parser.add_argument('--test_fold', type=str, default='./results/test')
     parser.add_argument('--test_mode', type=int, default=1)
     parser.add_argument('--sal_mode', type=str, default='t')
